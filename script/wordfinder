@@ -1,0 +1,53 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings FATAL => 'all';
+
+use FindBin;
+BEGIN { unshift @INC, "$FindBin::Bin/../lib" }
+
+use Mojolicious::Lite;
+use Wordfinder::Model::FindWords;
+
+helper findwords => sub { state $findwords = Wordfinder::Model::FindWords->new };
+
+# /ping
+# @return 200 OK    Returns no content, just a 200 OK status to confirm the service is running
+
+get '/ping' => sub {
+    my $c = shift;
+    $c->render( text => '' );
+};
+
+
+# /wordfinder/:input
+# Searches word list for words that have matching letters where any letter in the input can only be used once in the output
+# @param  :input            Alpha characters representing valid letters in matched words
+# @return 200 OK            Returns JSON array of words that match the input letters
+# @return 400 Bad Request   Returns a Bad Request when the input contains anything other than alpha characters
+
+get '/wordfinder/:input' => sub {
+    my $c     = shift;
+
+    # Input is case insensitive so we will transform it to lowercase
+    my $input = lc $c->param('input');
+
+    # As our input is in the path, using Mojo's validation is cumbersome. And we're a webservice so we don't need to be pretty about failures.
+    if( $input !~ /^[a-z]+$/i ){
+        return $c->render(
+            text => "Malformed Request. Only alphabetic characters are allowed.",
+            status => 400
+        );
+    }
+
+    # Find all words in our word list that match our input
+    my @matchingWords = $c->findwords->find( $input );
+
+    $c->render( json => \@matchingWords );
+};
+
+# Load and prepare the word list
+app->findwords->init( app );
+
+# Start the web service
+app->start;
